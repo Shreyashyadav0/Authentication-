@@ -18,7 +18,7 @@
 const { Model, DataTypes } = require("sequelize");
 const sequelize = require("../config/db"); //* sequelize instance
 
-class User extends Model {}
+class User extends Model {}//COMMITED 
 
 //* Creating the User table with name, email and password columns
 User.init(
