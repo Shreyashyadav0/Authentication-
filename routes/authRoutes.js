@@ -1,22 +1,24 @@
 const express = require("express");
 const router = express.Router();
-const bcrypt = require("bcrypt"); //* bcrypt is a 3rd party library which we use to hash, salt and compare passwords 
+const bcrypt = require("bcrypt"); //* bcrypt is a 3rd party library which we use to hash, salt and compare passwords
+const createDB = require("../config/db");
+const User = require("../models/userModel");
+
 const {
   validateName,
   validateEmail,
   validatePassword,
 } = require("../utils/validators");
 
-let users = {}; //* This will be our database
+createDB.sync().then(() => console.log("db is ready")); //* Sync all defined models to the DB
 
 router.post("/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body; //* destructuring name, email and password out of the request body
 
-    const userExists = users.hasOwnProperty(email);  
-
-    if (userExists) {
-      return res.status(403).send("User already exists"); //* check if the user with the entered email already exists in the database
+    const existingUser = await User.findOne({ where: { email: email } }); //* check if the user with the entered email already exists in the database
+    if (existingUser) {
+      return res.status(403).send("User already exists");
     }
 
     if (!validateName(name)) {
@@ -35,21 +37,21 @@ router.post("/signup", async (req, res) => {
       return res
         .status(400)
         .send(
-          "Invalid password: password must be at least 8 characters long and must include atlest one - one uppercase letter, one lowercase letter, one digit, one special character"
+          "Error: Invalid password: password must be at least 8 characters long and must include atleast one - one uppercase letter, one lowercase letter, one digit, one special character"
         );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10); //* hashes the password with a salt, generated with the specified number of rounds
+    const hashedPassword = await bcrypt.hash(password, (saltOrRounds = 10)); //* hashes the password with a salt, generated with the specified number of rounds
 
-    users[email] = {
-      name: name,
-      password: hashedPassword,
-    }; //* Saving user to the database
+    const user = { email, name, password: hashedPassword };
+    const createdUser = await User.create(user);
+
+    console.log(createdUser);
 
     return res
       .status(201)
       .send(
-        `Welcome to Devsnest ${users[email].name}. Thank you for signing up`
+        `Welcome to Devsnest ${createdUser.name}. Thank you for signing up`
       );
   } catch (err) {
     console.log(err);
@@ -68,20 +70,19 @@ router.post("/signin", async (req, res) => {
       return res.status(400).send("Error: Please enter your password");
     }
 
-    const userExists = users.hasOwnProperty(email); //* check if the user with the entered email exists in the database
-
-    if (!userExists) {
+    const existingUser = await User.findOne({ where: { email: email } }); //* check if the user with the entered email exists in the database
+    if (!existingUser) {
       return res.status(404).send("Error: User not found");
     }
 
     //* hashes the entered password and then compares it to the hashed password stored in the database
     const passwordMatched = await bcrypt.compare(
       password,
-      users[email].password
+      existingUser.password
     );
 
     if (!passwordMatched) {
-      return res.status(403).send("Error: Incorrect password");
+      return res.status(400).send("Error: Incorrect password");
     }
 
     return res
